@@ -44,8 +44,12 @@ pytest -m calibration
 python scripts/run_baseline.py --reps 10
 
 # interactive dashboard
-streamlit run app/Home.py
+python -m streamlit run app/Home.py
 ```
+
+> **Windows note:** invoke the venv's interpreter explicitly (`<venv>\Scripts\python.exe -m streamlit ...`).
+> A bare `streamlit` can resolve to an unrelated install elsewhere on `PATH`; anything older than
+> Python 3.7 fails on `from __future__ import annotations` in `app/app_setup.py`.
 
 The dashboard has five pages: **Home** (baseline vs NHS actuals), **Scenario
 Builder** (sliders for demand/spaces/staffing/streaming/beds with tabbed
