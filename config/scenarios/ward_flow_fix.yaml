@@ -1,0 +1,13 @@
+# Ward-flow improvement package: 20 more beds, faster turnaround, earlier and
+# weekend-protected discharging. The "output-side" intervention RCEM argues matters
+# most - compare against ED-side levers to see which moves the 4h/12h needles.
+meta:
+  name: ward_flow_fix
+  description: More beds, 60-min turnaround, earlier discharges, weekend discharging protected
+
+beds:
+  n_beds: 333
+  turnaround: {kind: lognormal, mean: 60, cv: 0.4}
+  weekend_discharge_slip: 0.15
+  discharge_hour_weights: [0, 0, 0, 0, 0, 0, 0, 0, 1, 3, 6, 9,
+                           12, 12, 11, 10, 8, 6, 4, 2, 0, 0, 0, 0]

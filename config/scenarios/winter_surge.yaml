@@ -1,0 +1,14 @@
+# Winter surge: +12% demand, higher volatility, longer ward stays (flu/norovirus),
+# heavier weekend discharge slippage. Apply over the baseline:
+#   Scenario.from_yaml("config/baseline_dgh.yaml", overrides="config/scenarios/winter_surge.yaml")
+meta:
+  name: winter_surge
+  description: January-style pressure - more demand, longer stays, slower discharges
+
+arrivals:
+  mean_daily_attendances: 280
+  daily_cv: 0.20
+
+beds:
+  los_days: {kind: lognormal, mean: 5.5, cv: 1.0}
+  weekend_discharge_slip: 0.45

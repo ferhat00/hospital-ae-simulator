@@ -1,0 +1,166 @@
+# Baseline scenario: a typical English Type 1 district general hospital ED with a
+# co-located UTC (Type 3), ~250 combined attendances/day, calibrated to national
+# FY2025-26 data. Every value is overridable; sources and rationale are documented
+# in docs/model_card.md. Times are minutes unless stated. Day 0 = Monday.
+
+meta:
+  name: baseline_dgh
+  description: Typical UK DGH Type 1 ED + co-located UTC, ~250 attendances/day
+  schema_version: 1
+
+run:
+  run_length_days: 42          # 14-day warm-up + 4 whole result weeks
+  warm_up_days: 14
+  audit_interval_min: 15
+  random_seed: 42
+  default_reps: 30
+
+arrivals:
+  mean_daily_attendances: 250
+  # Relative weights per clock hour (normalised internally). Shape per NHS England
+  # time-of-day analyses: trough 04:00-07:00, steep rise 08:00-11:00, peak
+  # 10:00-14:00, secondary evening peak 18:00-22:00.
+  hourly_profile: [0.55, 0.45, 0.38, 0.32, 0.30, 0.32, 0.42, 0.60,
+                   0.95, 1.30, 1.55, 1.60, 1.50, 1.40, 1.35, 1.30,
+                   1.28, 1.32, 1.40, 1.42, 1.30, 1.10, 0.90, 0.70]
+  dow_multipliers: [1.10, 1.00, 0.98, 0.97, 0.98, 1.00, 0.97]   # Mon..Sun, Monday uplift
+  # Share of each hour's arrivals that come by ambulance (higher overnight);
+  # volume-weighted average ~26%, in the 25-30% planning range for Type 1.
+  ambulance_fraction_by_hour: [0.42, 0.45, 0.48, 0.50, 0.50, 0.48, 0.40, 0.32,
+                               0.26, 0.24, 0.23, 0.23, 0.23, 0.24, 0.24, 0.25,
+                               0.26, 0.27, 0.28, 0.29, 0.31, 0.34, 0.38, 0.40]
+  booked_utc_per_day: 9        # ~3.5% of attendances booked via NHS 111
+  booked_no_show_prob: 0.10
+  paeds_fraction: 0.18         # under-16s; routed via minors/majors, reported separately
+  daily_cv: 0.15               # day-to-day demand volatility (flu waves, weather, events)
+
+triage:
+  # Manchester Triage System mix by arrival mode. Blended at ~26% ambulance this
+  # reproduces the national Type 1 distribution ~ RED 1 / ORANGE 13 / YELLOW 42 /
+  # GREEN 42 / BLUE 2 (%).
+  cat_mix_walkin:    {RED: 0.002, ORANGE: 0.06, YELLOW: 0.39, GREEN: 0.51, BLUE: 0.038}
+  cat_mix_ambulance: {RED: 0.03,  ORANGE: 0.30, YELLOW: 0.50, GREEN: 0.16, BLUE: 0.01}
+  registration_time:     {kind: lognormal, mean: 4.0, cv: 0.5}    # RCEM: <=5 min
+  triage_time_walkin:    {kind: gamma, mean: 6.5, cv: 0.4}
+  triage_time_ambulance: {kind: gamma, mean: 11.0, cv: 0.4}       # incl. stretcher assessment
+  patience_min: {GREEN: 180, BLUE: 120}    # LWBS reneging while queueing for a space
+
+streams:
+  resus:
+    spaces: 5
+    clinician_pool: ed_doctors
+    nurse_pool: ed_nurses
+    treatment_time: {kind: exponential, mean: 75}
+    nursing_time: {kind: lognormal, mean: 30, cv: 0.5}
+    stepdown_to_majors_prob: 0.30          # stabilised then continue in majors
+  majors:
+    spaces: 28
+    clinician_pool: ed_doctors
+    nurse_pool: ed_nurses
+    assessment_time: {kind: lognormal, mean: 25, cv: 0.5}
+    treatment_time:  {kind: lognormal, mean: 38, cv: 0.6}
+    nursing_time: {kind: lognormal, mean: 18, cv: 0.5}
+  minors:
+    spaces: 8
+    clinician_pool: ed_doctors
+    nurse_pool: ed_nurses
+    treatment_time: {kind: lognormal, mean: 17, cv: 0.5}
+    nursing_time: {kind: lognormal, mean: 8, cv: 0.5}
+  utc:
+    spaces: 8
+    clinician_pool: utc_enps
+    open_hours: [8, 24]                    # NHS UTC spec: GP/ENP-led, 12+ h/day
+    treatment_time: {kind: lognormal, mean: 16, cv: 0.5}
+  sdec:
+    spaces: 10
+    clinician_pool: sdec_clinicians
+    open_hours: [8, 20]
+    last_accept_hour: 18
+    treatment_time: {kind: lognormal, mean: 120, cv: 0.5}   # workup + observe + decide
+
+# Investigation turnarounds are sampled delays (not resources) in v1, applied in
+# majors and resus only; minors/UTC treatment times already include simple imaging.
+diagnostics:
+  bloods: {prob: 0.65, turnaround: {kind: lognormal, mean: 68, cv: 0.3}}
+  xray:   {prob: 0.35, turnaround: {kind: lognormal, mean: 38, cv: 0.4}}
+  ct:     {prob: 0.12, turnaround: {kind: lognormal, mean: 90, cv: 0.5}}
+
+staff_pools:
+  ed_doctors:
+    availability_factor: 0.89              # breaks etc. (Squires et al. 2023)
+    shifts:
+      - {start: 8,  end: 17, count: 11}
+      - {start: 16, end: 24, count: 9}     # twilight overlap
+      - {start: 22, end: 8,  count: 4}     # night (wraps midnight)
+  ed_nurses:
+    availability_factor: 0.89
+    shifts:
+      - {start: 7.5,  end: 20, count: 12}
+      - {start: 19.5, end: 8,  count: 8}
+  triage_nurses:
+    shifts:
+      - {start: 0, end: 24, count: 2}
+  utc_enps:
+    shifts:
+      - {start: 8, end: 24, count: 3}
+  sdec_clinicians:
+    shifts:
+      - {start: 8, end: 20, count: 3}
+
+spaces:
+  triage_rooms: 3
+  offload_spaces: 0                        # >0 adds a HALO/cohort area scenario
+  corridor_spaces: 10                      # escalation spaces for decanted boarders
+
+routing:
+  # Admission probability by triage category (monotone in acuity; blended overall
+  # Type 1 admission rate lands in the national 26-29% band).
+  admission_prob_by_cat: {RED: 0.80, ORANGE: 0.55, YELLOW: 0.26, GREEN: 0.08, BLUE: 0.02}
+  specialty_review_time: {kind: lognormal, mean: 65, cv: 0.5}    # referral -> specialty decision
+  # Probability a WALK-IN of each category is streamed to the co-located UTC at
+  # triage; with the walk-in mix this yields ~35% of all attendances + booked
+  # appointments ~= the national ~38% Type 3 share.
+  utc_stream_prob: {YELLOW: 0.10, GREEN: 0.80, BLUE: 0.90}
+  utc_transfer_to_majors: 0.04             # UTC cases needing escalation to ED
+  sdec_eligible_frac: {YELLOW: 0.20, GREEN: 0.10}
+  sdec_conversion_to_admission: 0.25       # NHS spec expects 20-30%
+  hot_clinic_frac: 0.05                    # would-be admissions diverted to next-day clinic
+  handover_clinical_min: 15                # clinical handover once a space is free
+
+beds:
+  enabled: true
+  # Sized so total bed demand (ED admissions + SDEC + electives, x ~5-day LoS)
+  # slightly EXCEEDS supply: chronic scarcity is the observed UK regime, with
+  # elective cancellations and corridor boarding as the relief valves.
+  n_beds: 313
+  los_days: {kind: lognormal, mean: 5.0, cv: 1.0}
+  # Clean/ward-acceptance friction between one occupant leaving and the next
+  # being admitted — without it a 93%-occupied ward still grants beds instantly.
+  turnaround: {kind: lognormal, mean: 90, cv: 0.4}
+  weekend_discharge_slip: 0.35           # UK weekend discharge rates run ~40-50% lower
+  # Discharges peak 13:00-16:00 and stop by 20:00; patients admitted in the
+  # evening therefore board overnight — the mechanism behind 12h+ waits.
+  discharge_hour_weights: [0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 3, 6,
+                           9, 12, 12, 11, 10, 8, 6, 3, 0, 0, 0, 0]
+  elective_demand_per_day: 14
+  elective_cancel_hour: 18
+  initial_occupancy: 0.93
+
+# National actual bands (England, FY2025-26) used ONLY as validation overlays and
+# calibration acceptance checks — never read by the simulation itself.
+#
+# NOTE on internal consistency: the monthly sitrep quotes Type 1 4-hour
+# performance of 60-64% (best months), while ECDS gives admitted 26.7% /
+# discharged 65.1% within 4h; with a 26-29% admission share those splits blend
+# to ~55-58%, not 60-64% — the two NHS collections genuinely disagree. The
+# bands below follow the ECDS-first, winter-weighted reading so that the
+# admitted/discharged split (the exit-block signature) is reproduced exactly.
+targets:
+  four_hour_type1: [0.54, 0.60]
+  four_hour_admitted: [0.24, 0.32]
+  four_hour_discharged: [0.62, 0.68]
+  four_hour_utc: [0.95, 0.995]
+  twelve_hour_from_arrival: [0.06, 0.13]
+  lwbs: [0.02, 0.05]
+  bed_occupancy: [0.94, 0.995]           # 08:00 census, winter UEC sitrep range
+  admission_rate_type1: [0.26, 0.29]
