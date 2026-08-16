@@ -1,0 +1,19 @@
+# Expanded SDEC: more chairs and clinicians, wider eligibility, longer opening.
+# Tests the NHS strategy of diverting ambulatory-sensitive demand away from cubicles.
+meta:
+  name: extra_sdec
+  description: Bigger SDEC - 14 chairs, 4 clinicians, wider eligibility, open to 22:00
+
+streams:
+  sdec:
+    spaces: 14
+    open_hours: [8, 22]
+    last_accept_hour: 20
+
+staff_pools:
+  sdec_clinicians:
+    shifts:
+      - {start: 8, end: 22, count: 4}
+
+routing:
+  sdec_eligible_frac: {YELLOW: 0.30, GREEN: 0.15}
